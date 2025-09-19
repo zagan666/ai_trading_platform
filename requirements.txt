@@ -1,0 +1,4 @@
+pytest
+pandas
+yfinance
+pandas-ta
