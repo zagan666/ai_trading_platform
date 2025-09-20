@@ -2,3 +2,7 @@ pytest
 pandas
 yfinance
 pandas-ta
+jupyterlab
+xgboost
+scikit-learn
+joblib

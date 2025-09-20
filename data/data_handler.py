@@ -16,4 +16,7 @@ def fetch_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
         pd.DataFrame: 包含 OHLCV 數據的 DataFrame。
     """
     data = yf.download(ticker, start=start_date, end=end_date, auto_adjust=True)
+    # 如果欄位是多層索引，移除 tickers 層
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
     return data

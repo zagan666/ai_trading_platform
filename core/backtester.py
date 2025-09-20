@@ -43,8 +43,8 @@ class Backtester:
         # 2. 模擬逐日交易
         for index, row in signals_df.iterrows():
             # 【關鍵修正】使用 .item() 從 Pandas Series 中提取純數值和字串
-            current_price = row['Close'].item()
-            signal = row['signal'].item()
+            current_price = row['Close']
+            signal = row['signal']
             
             # 使用新的 signal 變數進行判斷
             if signal == 'BUY' and self.cash > 0:
