@@ -6,3 +6,6 @@ jupyterlab
 xgboost
 scikit-learn
 joblib
+fastapi[all]
+streamlit
+plotly
