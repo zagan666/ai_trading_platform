@@ -1,10 +1,4 @@
 # dashboard.py
-import yaml
-
-# 載入設定檔
-with open('config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -31,7 +25,8 @@ mode = st.sidebar.radio("Select Mode", ["Backtest (Historical)", "Simulation (Re
 
 if mode == "Backtest (Historical)":
     st.sidebar.header("Backtest Parameters")
-    ticker = st.sidebar.text_input("Ticker", config['backtest']['ticker'])    start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2022-01-01"))
+    ticker = st.sidebar.text_input("Ticker", "SPY")
+    start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2022-01-01"))
     end_date = st.sidebar.date_input("End Date", pd.to_datetime("2023-12-31"))
     initial_capital = st.sidebar.number_input("Initial Capital", min_value=1000, value=10000)
     strategy_name = st.sidebar.selectbox("Strategy", ["ma_crossover", "ai_strategy"])
