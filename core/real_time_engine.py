@@ -1,4 +1,3 @@
-# core/real_time_engine.py
 import asyncio
 from strategies.base_strategy import BaseStrategy
 
@@ -14,6 +13,6 @@ class RealTimeEngine:
         if self.strategy:
             signals_df = self.strategy.generate_signals(data)
             for index, row in signals_df.iterrows():
-                events.append({'type': 'signal', 'signal': row['signal'], 'price': row['close']})
+                events.append({'type': 'signal', 'signal': row['signal'], 'price': row['Close']})  # 修正為 'Close'
 
         return events
