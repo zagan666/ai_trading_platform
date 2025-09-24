@@ -1,56 +1,124 @@
-# strategies/strategy.py
+# dashboard.py
+import streamlit as st
 import pandas as pd
-import numpy as np
-# 【修改點 1】從我們剛建立的 base_strategy.py 檔案中導入 BaseStrategy 類別
-from .base_strategy import BaseStrategy
+import plotly.graph_objects as go
+import asyncio
+import os
 
-# 【修改點 2】在類別名稱後的括號中，加上 BaseStrategy，表示繼承關係
-class MovingAverageCrossoverStrategy(BaseStrategy):
-    def __init__(self, fast_window: int, slow_window: int):
-        """
-        初始化均線交叉策略。
+# 導入我們自己建立的所有模組
+from data.data_handler import fetch_data
+from data.real_time_data import get_real_time_data
+from core.feature_engineering import add_technical_indicators
+from strategies.base_strategy import BaseStrategy
+from strategies.strategy import MovingAverageCrossoverStrategy
+from strategies.ai_strategy import AIStrategy
+from core.backtester import Backtester
+from core.real_time_engine import RealTimeEngine
+from core.paper_trader import PaperTrader
+from strategies.custom_strategy_loader import load_custom_strategies
 
-        Args:
-            fast_window (int): 短天期移動平均線的窗口大小。
-            slow_window (int): 長天期移動平均線的窗口大小。
-        """
-        self.fast_window = fast_window
-        self.slow_window = slow_window
+# --- Streamlit 網頁介面設定 ---
+st.set_page_config(layout="wide")
+st.title("AI Trading Platform")
 
-    # 這個方法完全符合 BaseStrategy 的要求，所以無需任何改動
-    def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        根據收盤價數據產生交易信號。
+# --- 載入自訂策略 ---
+custom_strategies = load_custom_strategies('custom_strategies')
 
-        Args:
-            data (pd.DataFrame): 包含 'Close' 欄位的價格數據。
+# --- 側邊欄參數輸入 ---
+st.sidebar.header("Mode Selection")
+mode = st.sidebar.radio("Select Mode", ["Backtest (Historical)", "Simulation (Real-Time)"])
 
-        Returns:
-            pd.DataFrame: 包含 'signal' 欄位的原始數據。
-        """
-        # --- 以下所有邏輯都維持原樣，無需任何修改 ---
-        
-        # 建立數據副本以避免修改原始 DataFrame
-        signals_df = data.copy()
+if mode == "Backtest (Historical)":
+    st.sidebar.header("Backtest Parameters")
+    ticker = st.sidebar.text_input("Ticker", "SPY")
+    start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2022-01-01"))
+    end_date = st.sidebar.date_input("End Date", pd.to_datetime("2023-12-31"))
+    initial_capital = st.sidebar.number_input("Initial Capital", min_value=1000, value=10000)
+    
+    # 策略選項：標準 + 自訂
+    strategy_options = ["ma_crossover", "ai_strategy"] + list(custom_strategies.keys())
+    strategy_name = st.sidebar.selectbox("Strategy", strategy_options)
 
-        # 計算快線和慢線
-        signals_df['fast_ma'] = signals_df['Close'].rolling(window=self.fast_window).mean()
-        signals_df['slow_ma'] = signals_df['Close'].rolling(window=self.slow_window).mean()
-        signals_df.dropna(inplace=True) # 刪除所有包含 NaN 值的資料列
+    if st.sidebar.button("Run Backtest"):
+        with st.spinner("Running backtest..."):
+            try:
+                raw_data = fetch_data(ticker, start_date, end_date)
+                strategy: BaseStrategy
+                data_for_backtest: pd.DataFrame
 
-        # 初始化信號欄位，預設為持有
-        signals_df['signal'] = 'HOLD'
+                if strategy_name in custom_strategies:
+                    strategy = custom_strategies[strategy_name]()  # 實例化自訂策略
+                    data_for_backtest = raw_data
+                elif strategy_name == "ma_crossover":
+                    strategy = MovingAverageCrossoverStrategy(fast_window=50, slow_window=200)
+                    data_for_backtest = raw_data
+                elif strategy_name == "ai_strategy":
+                    MODEL_PATH = 'models/xgboost_model_v1.joblib'
+                    strategy = AIStrategy(model_path=MODEL_PATH)
+                    data_for_backtest = add_technical_indicators(raw_data)
 
-        # 找到黃金交叉點 (快線向上穿越慢線)
-        # 條件：前一天快線 <= 慢線，且今天快線 > 慢線
-        buy_condition = (signals_df['fast_ma'].shift(1) <= signals_df['slow_ma'].shift(1)) & \
-                        (signals_df['fast_ma'] > signals_df['slow_ma'])
-        signals_df.loc[buy_condition, 'signal'] = 'BUY'
+                backtester = Backtester(initial_capital=initial_capital, strategy=strategy)
+                performance_df = backtester.run(data_for_backtest)
 
-        # 找到死亡交叉點 (快線向下穿越慢線)
-        # 條件：前一天快線 >= 慢線，且今天快線 < 慢線
-        sell_condition = (signals_df['fast_ma'].shift(1) >= signals_df['slow_ma'].shift(1)) & \
-                         (signals_df['fast_ma'] < signals_df['slow_ma'])
-        signals_df.loc[sell_condition, 'signal'] = 'SELL'
+                st.subheader(f"Performance Chart: {strategy_name.replace('_', ' ').title()}")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=performance_df.index, y=performance_df['strategy'], mode='lines', name='Strategy'))
+                fig.add_trace(go.Scatter(x=performance_df.index, y=performance_df['benchmark'], mode='lines', name='Benchmark'))
+                fig.update_layout(title=f'{ticker} Performance', xaxis_title='Date', yaxis_title='Portfolio Value')
+                st.plotly_chart(fig, use_container_width=True)
 
-        return signals_df
+                final_strategy_value = performance_df['strategy'].iloc[-1]
+                final_benchmark_value = performance_df['benchmark'].iloc[-1]
+                strategy_return = (final_strategy_value / initial_capital - 1) * 100
+                benchmark_return = (final_benchmark_value / initial_capital - 1) * 100
+
+                col1, col2 = st.columns(2)
+                col1.metric("Strategy Final Value", f"${final_strategy_value:,.2f}", f"{strategy_return:.2f}%")
+                col2.metric("Benchmark Final Value", f"${final_benchmark_value:,.2f}", f"{benchmark_return:.2f}%")
+
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
+else:  # Real-Time Simulation Mode
+    st.sidebar.header("Simulation Parameters")
+    exchange = st.sidebar.text_input("Exchange", "binance")
+    symbol = st.sidebar.text_input("Symbol", "BTC/USDT")
+    # 策略選項：標準 + 自訂
+    strategy_options = ["ma_crossover", "ai_strategy"] + list(custom_strategies.keys())
+    strategy_name = st.sidebar.selectbox("Strategy", strategy_options)
+    initial_capital = st.sidebar.number_input("Initial Capital", min_value=1000, value=10000)
+    refresh_interval = st.sidebar.number_input("Refresh Interval (seconds)", min_value=1, value=60)
+
+    if st.sidebar.button("Start Simulation"):
+        st.subheader("Real-Time Simulation Running...")
+        placeholder = st.empty()
+
+        async def run_simulation():
+            trader = PaperTrader(initial_capital=initial_capital)
+            strategy: BaseStrategy
+            if strategy_name in custom_strategies:
+                strategy = custom_strategies[strategy_name]()  # 實例化自訂策略
+            elif strategy_name == "ai_strategy":
+                MODEL_PATH = 'models/xgboost_model_v1.joblib'
+                strategy = AIStrategy(model_path=MODEL_PATH)
+            else:
+                strategy = MovingAverageCrossoverStrategy(fast_window=50, slow_window=200)
+
+            engine = RealTimeEngine(strategy=strategy)
+
+            while True:
+                data = await get_real_time_data(exchange, symbol, limit=1)
+                if strategy_name == "ai_strategy":
+                    data = add_technical_indicators(data)
+                events = await engine.process_data(data)
+                for event in events:
+                    await trader.process_event(event)
+
+                # 更新儀表板顯示 (修正 'close' 為 'Close')
+                placeholder.text(f"Current Cash: {trader.cash:.2f} | Position: {trader.position:.4f} | Price: {data['Close'].iloc[-1]:.2f}")
+                await asyncio.sleep(refresh_interval)
+
+        asyncio.run(run_simulation())
+
+    else:
+        st.info("Set parameters and click 'Start Simulation'.")
