@@ -1,5 +1,6 @@
 import pytest
 from strategies.custom_strategy_loader import load_custom_strategies
+from strategies.base_strategy import BaseStrategy  # 新增這行
 
 @pytest.fixture
 def custom_strategy_dir(tmpdir):
