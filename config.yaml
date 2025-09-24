@@ -1,0 +1,13 @@
+# config.yaml
+backtest:
+  ticker: SPY
+  start_date: 2022-01-01
+  end_date: 2023-12-31
+  initial_capital: 10000
+
+strategy:
+  ma_crossover:
+    fast_window: 50
+    slow_window: 200
+  ai_strategy:
+    model_path: models/xgboost_model_v1.joblib

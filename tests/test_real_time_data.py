@@ -16,5 +16,5 @@ async def test_get_real_time_data():
     # 3. 斷言
     assert isinstance(data, pd.DataFrame)
     assert not data.empty
-    expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+    expected_columns = ['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']
     assert all(col in data.columns for col in expected_columns)

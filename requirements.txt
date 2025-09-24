@@ -11,3 +11,4 @@ streamlit
 plotly
 ccxt
 pytest-asyncio
+pyyaml
