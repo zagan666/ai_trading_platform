@@ -1,0 +1,17 @@
+# 虛擬環境
+venv/
+.venv/
+
+# Python 快取
+__pycache__/
+*.pyc
+
+# Jupyter Notebook 檢查點
+.ipynb_checkpoints/
+
+# 模型檔案（可選，視需求）
+models/*.joblib
+
+# 其他常見忽略
+*.log
+.DS_Store
